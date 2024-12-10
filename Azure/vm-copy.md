@@ -8,6 +8,11 @@
 
 ### az コマンドで
 
+
+```bash
+az snapshot create --resource-group RESOURCE_GROUP --source DISK_ID --name SNAPSHOT_NAME --tags environment=VALUE
+```
+
 スナップショットがある状態で
 
 指定は個人的に使用するものをチョイス
