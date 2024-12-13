@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SESSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "SES Bounce Notifications"
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "LambdaSESSNSPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "sns:Receive"
+                  - "sns:ListSubscriptionsByTopic"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+
+  NotifySlackFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: "index.handler"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import urllib3
+          import os
+
+          http = urllib3.PoolManager()
+          SLACK_WEBHOOK_URL = os.environ['SLACK_WEBHOOK_URL']
+
+          def handler(event, context):
+              message = json.loads(event['Records'][0]['Sns']['Message'])
+              bounce = message['bounce']
+              bounce_type = bounce['bounceType']
+              bounced_recipients = bounce['bouncedRecipients']
+
+              text = f"SES Bounce Notification\nBounce Type: {bounce_type}\nRecipients:\n"
+              for recipient in bounced_recipients:
+                  text += f"- {recipient['emailAddress']}\n"
+
+              slack_message = {
+                  'text': text
+              }
+
+              response = http.request(
+                  'POST',
+                  SLACK_WEBHOOK_URL,
+                  body=json.dumps(slack_message),
+                  headers={'Content-Type': 'application/json'}
+              )
+
+              return {
+                  'statusCode': response.status,
+                  'body': response.data
+              }
+      Runtime: "python3.8"
+      Timeout: 10
+      Environment:
+        Variables:
+          SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/your/webhook/url"
+
+  SESSNSTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SESSNSTopic
+      Protocol: "lambda"
+      Endpoint: !GetAtt NotifySlackFunction.Arn
+
+  LambdaPermissionForSNS:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref NotifySlackFunction
+      Action: "lambda:InvokeFunction"
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref SESSNSTopic
+
+Outputs:
+  SNSTopicArn:
+    Description: "The ARN of the SNS topic for SES bounce notifications"
+    Value: !Ref SESSNSTopic
