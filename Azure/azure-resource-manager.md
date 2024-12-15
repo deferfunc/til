@@ -21,7 +21,7 @@
 * 複数のリソースをひとつのARMテンプレート内に作成できる。`resources` プロパティ内に配列を指定する。
     * [Create multiple resource instances - Azure Resource Manager | Microsoft Learn](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/template-tutorial-create-multiple-instances?tabs=CLI%2Cazure-cli)
 * スナップショットからCopyしてディスクを作成といった指示もできる
-  ```
+  ```json
       {  
       "type": "Microsoft.Compute/disks",  
       "apiVersion": "2022-03-02",  
